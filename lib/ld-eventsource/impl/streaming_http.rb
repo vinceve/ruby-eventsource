@@ -212,10 +212,11 @@ module SSE
       def read_line
         loop do
           @lock.synchronize do
-            i = @buffer.index(/[\r\n]/)
+            encoded = @buffer.force_encoding(@encoding)
+            i = encoded.index(/[\r\n]/)
             if !i.nil?
-              i += 1 if (@buffer[i] == "\r" && i < @buffer.length - 1 && @buffer[i + 1] == "\n")
-              return @buffer.slice!(0, i + 1).force_encoding(@encoding).encode(Encoding::UTF_8)
+              i += 1 if (encoded[i] == "\r" && i < encoded.length - 1 && encoded[i + 1] == "\n")
+              return encoded.slice!(0, i + 1).encode(Encoding::UTF_8)
             end
           end
           return nil if !read_chunk_into_buffer
