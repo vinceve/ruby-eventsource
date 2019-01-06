@@ -316,7 +316,7 @@ EOT
 
   it "can change initial reconnect delay based on directive from server" do
     request_times = []
-    configured_interval = 1
+    configured_interval = 2
     retry_ms = 100
 
     with_server do |server|
@@ -339,7 +339,7 @@ EOT
       with_client(client) do |client|
         expect(event_sink.pop).to eq(simple_event_1)
         interval = request_times[1] - request_times[0]
-        expect(interval).to be < ((retry_ms.to_f / 1000) + 0.1)
+        expect(interval).to be < ((retry_ms.to_f / 1000) + 0.2)
       end
     end
   end

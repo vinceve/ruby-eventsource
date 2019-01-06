@@ -92,6 +92,62 @@ EOT
     end
   end
 
+  unicode_line1 = "proszę"   # please
+  unicode_line2 = "dziękuję" # thank you
+  unicode_body = "#{unicode_line1}\n#{unicode_line2}\n"
+
+  it "defaults to UTF-8 when reading lines" do
+    with_server do |server|
+      server.setup_response("/") do |req,res|
+        res.body = unicode_body
+      end
+      with_connection(subject.new(server.base_uri)) do |cxn|
+        lines = cxn.read_lines
+        expect(lines.next).to eq("#{unicode_line1}\n")
+        expect(lines.next).to eq("#{unicode_line2}\n")
+      end
+    end
+  end
+
+  it "defaults to UTF-8 when reading entire body" do
+    with_server do |server|
+      server.setup_response("/") do |req,res|
+        res.body = unicode_body
+      end
+      with_connection(subject.new(server.base_uri)) do |cxn|
+        read_body = cxn.read_all
+        expect(read_body).to eq(unicode_body)
+      end
+    end
+  end
+
+  it "charset can be specified explicitly when reading lines" do
+    with_server do |server|
+      server.setup_response("/") do |req,res|
+        res.body = unicode_body.encode(Encoding::ISO_8859_2)
+        res["Content-Type"] = "text/plain; charset=ISO-8859-2"
+      end
+      with_connection(subject.new(server.base_uri)) do |cxn|
+        lines = cxn.read_lines
+        expect(lines.next).to eq("#{unicode_line1}\n")
+        expect(lines.next).to eq("#{unicode_line2}\n")
+      end
+    end
+  end
+
+  it "charset can be specified explicitly when reading entire body" do
+    with_server do |server|
+      server.setup_response("/") do |req,res|
+        res.body = unicode_body.encode(Encoding::ISO_8859_2)
+        res["Content-Type"] = "text/plain; charset=ISO-8859-2"
+      end
+      with_connection(subject.new(server.base_uri)) do |cxn|
+        read_body = cxn.read_all
+        expect(read_body).to eq(unicode_body)
+      end
+    end
+  end
+
   it "enforces read timeout" do
     with_server do |server|
       server.setup_response("/") do |req,res|

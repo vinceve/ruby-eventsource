@@ -219,14 +219,14 @@ module SSE
             read_timeout: @read_timeout
           )
           if cxn.status == 200
-            content_type = cxn.headers["content-type"]
-            if content_type && content_type.start_with?("text/event-stream")
+            media_type = cxn.media_type
+            if media_type == "text/event-stream"
               return cxn  # we're good to proceed
             else
               cxn.close
-              err = Errors::HTTPContentTypeError.new(cxn.headers["content-type"])
+              err = Errors::HTTPContentTypeError.new(media_type)
               @on[:error].call(err)
-              @logger.warn { "Event source returned unexpected content type '#{cxn.headers["content-type"]}'" }
+              @logger.warn { "Event source returned unexpected content type '#{media_type}'" }
             end
           else
             body = cxn.read_all  # grab the whole response body in case it has error details

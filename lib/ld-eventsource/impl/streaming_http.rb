@@ -11,7 +11,7 @@ module SSE
     # The socket is created and managed by Socketry, which we use so that we can have a read timeout.
     #
     class StreamingHTTPConnection
-      attr_reader :status, :headers
+      attr_reader :status, :headers, :media_type
 
       #
       # Opens a new connection.
@@ -28,6 +28,7 @@ module SSE
         @reader = HTTPResponseReader.new(@socket, read_timeout)
         @status = @reader.status
         @headers = @reader.headers
+        @media_type = @reader.media_type
         @closed = Concurrent::AtomicBoolean.new(false)
       end
 
@@ -137,7 +138,7 @@ module SSE
     class HTTPResponseReader
       DEFAULT_CHUNK_SIZE = 10000
 
-      attr_reader :status, :headers
+      attr_reader :status, :headers, :media_type
 
       def initialize(socket, read_timeout)
         @socket = socket
@@ -166,6 +167,9 @@ module SSE
         end
         @headers = Hash[@parser.header.map { |k,v| [k.downcase, v] }]
         @status = @parser.status_code
+        (@media_type, charset) = parse_content_type(@headers['content-type'])
+        charset = 'utf-8' if !charset
+        @encoding = Encoding::find(charset)
       end
 
       def read_lines
@@ -181,7 +185,7 @@ module SSE
       def read_all
         while read_chunk_into_buffer
         end
-        @buffer
+        @buffer.force_encoding(@encoding).encode(Encoding::UTF_8)
       end
 
       private
@@ -211,11 +215,26 @@ module SSE
             i = @buffer.index(/[\r\n]/)
             if !i.nil?
               i += 1 if (@buffer[i] == "\r" && i < @buffer.length - 1 && @buffer[i + 1] == "\n")
-              return @buffer.slice!(0, i + 1).force_encoding(Encoding::UTF_8)
+              return @buffer.slice!(0, i + 1).force_encoding(@encoding).encode(Encoding::UTF_8)
             end
           end
           return nil if !read_chunk_into_buffer
         end
+      end
+
+      def parse_content_type(value)
+        return [nil, nil] if value.nil? || value == ''
+        parts = value.split(/; */)
+        return [value, nil] if parts.count < 2
+        charset = nil
+        parts.each do |part|
+          fields = part.split('=')
+          if fields.count >= 2 && fields[0] == 'charset'
+            charset = fields[1]
+            break
+          end
+        end
+        return [parts[0], charset]
       end
     end
   end
