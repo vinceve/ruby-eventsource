@@ -14,13 +14,14 @@ Gem::Specification.new do |spec|
   spec.description   = "LaunchDarkly SSE client for Ruby"
   spec.homepage      = "https://github.com/launchdarkly/ruby-eventsource"
   spec.license       = "Apache-2.0"
+  spec.required_ruby_version = ">= 2.4.0"
 
   spec.files         = `git ls-files -z`.split("\x0")
   spec.executables   = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
   spec.test_files    = spec.files.grep(%r{^(test|spec|features)/})
   spec.require_paths = ["lib"]
 
-  spec.add_development_dependency "bundler", "~> 1.7"
+  spec.add_development_dependency "bundler", "~> 1.17"
   spec.add_development_dependency "rspec", "~> 3.2"
   spec.add_development_dependency "rspec_junit_formatter", "~> 0.3.0"
 

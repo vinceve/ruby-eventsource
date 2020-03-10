@@ -1,92 +1,47 @@
-version: 2
+version: 2.1
 
 workflows:
-  version: 2
   test:
     jobs:
-      - test-misc-rubies
-      - test-2.2
-      - test-2.3
-      - test-2.4
-      - test-2.5
-      - test-jruby-9.2
-
-ruby-docker-template: &ruby-docker-template
-  steps:
-    - checkout
-    - run: |
-        if [[ $CIRCLE_JOB == test-jruby* ]]; then
-          gem install jruby-openssl; # required by bundler, no effect on Ruby MRI
-        fi
-    - run: ruby -v
-    - run: gem install bundler -v "~> 1.17"
-    - run: bundle install
-    - run: mkdir ./rspec
-    - run: bundle exec rspec --format progress --format RspecJunitFormatter -o ./rspec/rspec.xml spec
-    - store_test_results:
-        path: ./rspec
-    - store_artifacts:
-        path: ./rspec
+      - test-linux:
+          name: Ruby 2.4
+          docker-image: circleci/ruby:2.4
+      - test-linux:
+          name: Ruby 2.5
+          docker-image: circleci/ruby:2.5
+      - test-linux:
+          name: Ruby 2.6
+          docker-image: circleci/ruby:2.6
+      - test-linux:
+          name: Ruby 2.7
+          docker-image: circleci/ruby:2.7
+      - test-linux:
+          name: JRuby 9.2
+          docker-image: circleci/jruby:9-jdk
+          use-jruby-openssl: true
 
 jobs:
-  test-2.2:
-    <<: *ruby-docker-template
+  test-linux:
+    parameters:
+      docker-image:
+        type: string
+      use-ruby-openssl:
+        type: boolean
+        default: false
     docker:
-      - image: circleci/ruby:2.2.10-jessie
-  test-2.3:
-    <<: *ruby-docker-template
-    docker:
-      - image: circleci/ruby:2.3.7-jessie
-  test-2.4:
-    <<: *ruby-docker-template
-    docker:
-      - image: circleci/ruby:2.4.5-stretch
-  test-2.5:
-    <<: *ruby-docker-template
-    docker:
-      - image: circleci/ruby:2.5.3-stretch
-  test-jruby-9.2:
-    <<: *ruby-docker-template
-    docker:
-      - image: circleci/jruby:9-jdk
-
-  # The following very slow job uses an Ubuntu container to run the Ruby versions that
-  # CircleCI doesn't provide Docker images for.
-  test-misc-rubies:
-    machine:
-      image: circleci/classic:latest
-    environment:
-      - RUBIES: "jruby-9.1.17.0"
+      - image: <<parameters.docker-image>>
     steps:
       - checkout
-      - run:
-          name: install all Ruby versions
-          command: "parallel rvm install ::: $RUBIES"
-      - run:
-          name: bundle install for all versions
-          shell: /bin/bash -leo pipefail # need -l in order for "rvm use" to work
-          command: |
-            set -e;
-            for i in $RUBIES;
-            do
-              rvm use $i;
-              if [[ $i == jruby* ]]; then
-                gem install jruby-openssl; # required by bundler, no effect on Ruby MRI
-              fi;
-              # bundler 2.0 may be preinstalled, we need to remove it if so
-              yes | gem uninstall bundler --version '>=2.0' || true;
-              gem install bundler -v "~> 1.17";
-              bundle install;
-              mv Gemfile.lock "Gemfile.lock.$i"
-            done
-      - run:
-          name: run tests for all versions
-          shell: /bin/bash -leo pipefail
-          command: |
-            set -e;
-            for i in $RUBIES;
-            do
-              rvm use $i;
-              cp "Gemfile.lock.$i" Gemfile.lock;
-              bundle exec rspec spec;
-            done
+      - when:
+          condition: <<parameters.use-jruby-openssl>>
+          steps:
+            - run: gem install jruby-openssl # required by bundler, no effect on Ruby MRI
+      - run: ruby -v
+      - run: gem install bundler -v "~> 1.17"
+      - run: bundle install
+      - run: mkdir ./rspec
+      - run: bundle exec rspec --format progress --format RspecJunitFormatter -o ./rspec/rspec.xml spec
+      - store_test_results:
+          path: ./rspec
+      - store_artifacts:
+          path: ./rspec
