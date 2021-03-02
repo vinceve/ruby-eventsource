@@ -85,16 +85,19 @@ module SSE
     #   `open(uri, timeout)` to return a connected `Socket`
     # @yieldparam [Client] client  the new client instance, before opening the connection
     # 
-    def initialize(uri,
-          headers: {},
-          connect_timeout: DEFAULT_CONNECT_TIMEOUT,
-          read_timeout: DEFAULT_READ_TIMEOUT,
-          reconnect_time: DEFAULT_RECONNECT_TIME,
-          reconnect_reset_interval: DEFAULT_RECONNECT_RESET_INTERVAL,
-          last_event_id: nil,
-          proxy: nil,
-          logger: nil,
-          socket_factory: nil)
+    def initialize(
+      uri,
+      headers: {},
+      connect_timeout: DEFAULT_CONNECT_TIMEOUT,
+      read_timeout: DEFAULT_READ_TIMEOUT,
+      reconnect_time: DEFAULT_RECONNECT_TIME,
+      reconnect_reset_interval: DEFAULT_RECONNECT_RESET_INTERVAL,
+      last_event_id: nil,
+      proxy: nil,
+      logger: nil,
+      socket_factory: nil,
+      ssl_options: nil
+    )
       @uri = URI(uri)
       @stopped = Concurrent::AtomicBoolean.new(false)
 
@@ -102,11 +105,12 @@ module SSE
       @connect_timeout = connect_timeout
       @read_timeout = read_timeout
       @logger = logger || default_logger
+      @ssl_options = ssl_options
       http_client_options = {}
       if socket_factory
         http_client_options["socket_class"] = socket_factory
       end
-      
+
       if proxy
         @proxy = proxy
       else
@@ -191,13 +195,13 @@ module SSE
     end
 
     private
-    
+
     def reset_http
       @http_client.close if !@http_client.nil?
       @cxn = nil
       @buffer = ""
     end
-    
+
     def read_lines
       Enumerator.new do |gen|
         loop do
@@ -207,7 +211,7 @@ module SSE
         end
       end
     end
-    
+
     def read_line
       loop do
         @lock.synchronize do
@@ -220,13 +224,13 @@ module SSE
         return nil if !read_chunk_into_buffer
       end
     end
-    
+
     def read_chunk_into_buffer
       # If @done is set, it means the Parser has signaled end of response body
       @lock.synchronize { return false if @done }
       begin
         data = @cxn.readpartial
-      rescue HTTP::TimeoutError 
+      rescue HTTP::TimeoutError
         # We rethrow this as our own type so the caller doesn't have to know the httprb API
         raise Errors::ReadTimeoutError.new(@read_timeout)
       end
@@ -276,15 +280,21 @@ module SSE
         return if @stopped.value
         interval = @backoff.next_interval
         if interval > 0
-          @logger.info { "Will retry connection after #{'%.3f' % interval} seconds" } 
+          @logger.info { "Will retry connection after #{'%.3f' % interval} seconds" }
           sleep(interval)
         end
         cxn = nil
         begin
           @logger.info { "Connecting to event stream at #{@uri}" }
-          cxn = @http_client.request("GET", @uri, {
+
+          http_options = {
             headers: build_headers
-          })
+          }
+
+          http_options = http_options.merge(@ssl_options) if @ssl_options
+
+          cxn = @http_client.request("GET", @uri, http_options)
+
           if cxn.status.code == 200
             content_type = cxn.headers["content-type"]
             if content_type && content_type.start_with?("text/event-stream")
@@ -342,7 +352,7 @@ module SSE
       @logger.warn { "#{message}: #{e.inspect}"}
       @logger.debug { "Exception trace: #{e.backtrace}" }
       begin
-        @on[:error].call(e)      
+        @on[:error].call(e)
       rescue StandardError => ee
         @logger.warn { "Error handler threw an exception: #{ee.inspect}"}
         @logger.debug { "Exception trace: #{ee.backtrace}" }
