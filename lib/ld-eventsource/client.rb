@@ -291,7 +291,7 @@ module SSE
             headers: build_headers
           }
 
-          http_options = http_options.merge(@ssl_options) if @ssl_options
+          http_options = http_options.merge({ ssl: @ssl_options }) if @ssl_options
 
           cxn = @http_client.request("GET", @uri, http_options)
 
